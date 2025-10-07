@@ -35,7 +35,7 @@ export class AuthService {
       email,
       password: hashedPassword,
       firstname,
-      lastname
+      lastname,
     });
 
     await user.save();
