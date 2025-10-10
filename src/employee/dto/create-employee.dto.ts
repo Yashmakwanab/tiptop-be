@@ -26,6 +26,11 @@ export class CreateEmployeeDto {
   emailAddress: string;
 
   @IsString()
+  @IsOptional()
+  @MinLength(6, { message: 'Password must be at least 6 characters long' })
+  password?: string;
+
+  @IsString()
   @IsNotEmpty()
   associates: string;
 
@@ -41,9 +46,6 @@ export class CreateEmployeeDto {
   @IsNotEmpty()
   @MinLength(3)
   user_name: string;
-
-  @IsString()
-  user_name_id: string;
 
   @IsString()
   @IsNotEmpty()
@@ -138,6 +140,10 @@ export class CreateEmployeeDto {
   @IsBoolean()
   @IsOptional()
   is_deleted?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isSuperAdmin?: boolean;
 
   @IsString()
   @IsOptional()

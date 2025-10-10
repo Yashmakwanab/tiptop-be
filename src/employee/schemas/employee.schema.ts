@@ -15,6 +15,9 @@ export class Employee {
   emailAddress: string;
 
   @Prop({ required: true })
+  password: string;
+
+  @Prop({ required: true })
   associates: string;
 
   @Prop({ type: [String], default: [] })
@@ -25,9 +28,6 @@ export class Employee {
 
   @Prop({ required: true, unique: true })
   user_name: string;
-
-  @Prop({ default: '' })
-  user_name_id: string;
 
   @Prop({ required: true })
   address: string;
@@ -72,7 +72,7 @@ export class Employee {
   work_status: string;
 
   @Prop({ default: null })
-  resigned_date?: string;
+  resigned_date: Date;
 
   @Prop({ required: true })
   monthlySalary: string;
@@ -97,6 +97,18 @@ export class Employee {
 
   @Prop({ default: false })
   is_deleted: boolean;
+
+  @Prop({ default: false })
+  isSuperAdmin: boolean;
+
+  @Prop({ default: true })
+  isActive: boolean;
+
+  @Prop({ default: null })
+  otp: string;
+
+  @Prop({ default: null })
+  otpExpiry: Date;
 
   @Prop({ required: true })
   created_by: string;

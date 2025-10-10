@@ -65,4 +65,17 @@ export class EmployeeController {
   permanentDelete(@Param('id') id: string) {
     return this.employeeService.permanentDelete(id);
   }
+
+  @Post(':id/resend-credentials')
+  resendCredentials(@Param('id') id: string) {
+    return this.employeeService.resendCredentials(id);
+  }
+
+  @Post(':id/reset-password')
+  resetPassword(
+    @Param('id') id: string,
+    @Body() body: { password: string },
+  ) {
+    return this.employeeService.resetPassword(id, body.password);
+  }
 }

@@ -9,6 +9,8 @@ import {
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { ResendOtpDto } from './dto/resend-otp.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Controller('auth')
@@ -25,9 +27,19 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
+  @Post('verify-otp')
+  async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtp(verifyOtpDto);
+  }
+
+  @Post('resend-otp')
+  async resendOtp(@Body() resendOtpDto: ResendOtpDto) {
+    return this.authService.resendOtp(resendOtpDto.email);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  async getProfile(@Request() req) {
+  async getProfile(@Request() req: { user: { userId: string } }) {
     return this.authService.getProfile(req.user.userId);
   }
 }

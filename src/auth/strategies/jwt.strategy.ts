@@ -4,12 +4,15 @@ import { InjectModel } from '@nestjs/mongoose';
 import { PassportStrategy } from '@nestjs/passport';
 import { Model } from 'mongoose';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { UserDocument } from '../schemas/user.schema';
+import {
+  Employee,
+  EmployeeDocument,
+} from '../../employee/schemas/employee.schema';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    @InjectModel('User') private userModel: Model<UserDocument>,
+    @InjectModel(Employee.name) private employeeModel: Model<EmployeeDocument>,
     configService: ConfigService,
   ) {
     const secret = configService.get<string>('JWT_SECRET');
@@ -24,11 +27,19 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string }) {
-    const user = await this.userModel.findById(payload.sub);
-    if (!user) {
+  async validate(payload: {
+    sub: string;
+    email: string;
+    isSuperAdmin: boolean;
+  }) {
+    const employee = await this.employeeModel.findById(payload.sub);
+    if (!employee || employee.is_deleted || !employee.isActive) {
       throw new UnauthorizedException();
     }
-    return { userId: payload.sub, email: payload.email };
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      isSuperAdmin: payload.isSuperAdmin,
+    };
   }
 }

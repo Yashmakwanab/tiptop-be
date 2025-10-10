@@ -9,13 +9,27 @@ import { Employee, EmployeeDocument } from './schemas/employee.schema';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { QueryEmployeeDto } from './dto/query-employee.dto';
+import { MailService } from '../mail/mail.service';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class EmployeeService {
   constructor(
     @InjectModel(Employee.name)
     private employeeModel: Model<EmployeeDocument>,
+    private mailService: MailService,
   ) {}
+
+  private generateRandomPassword(): string {
+    const length = 12;
+    const charset =
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+      password += charset.charAt(Math.floor(Math.random() * charset.length));
+    }
+    return password;
+  }
 
   async create(createEmployeeDto: CreateEmployeeDto) {
     // Check if email already exists
@@ -36,8 +50,40 @@ export class EmployeeService {
       throw new ConflictException('Username already exists');
     }
 
-    const employee = new this.employeeModel(createEmployeeDto);
-    return employee.save();
+    // Use provided password or generate random one
+    const tempPassword = createEmployeeDto.password || this.generateRandomPassword();
+
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // Create employee record
+    const employee = new this.employeeModel({
+      ...createEmployeeDto,
+      password: hashedPassword,
+      isActive: true,
+    });
+    await employee.save();
+
+    // Send credentials email
+    try {
+      await this.mailService.sendEmployeeCredentials(
+        createEmployeeDto.emailAddress,
+        createEmployeeDto.full_name,
+        createEmployeeDto.user_name,
+        tempPassword,
+        createEmployeeDto.isSuperAdmin || false,
+      );
+    } catch (error) {
+      console.error('Failed to send email:', error);
+    }
+
+    return {
+      employee: {
+        ...employee.toObject(),
+        password: undefined, // Don't return password in response
+      },
+      message:
+        'Employee created successfully. Login credentials have been sent to their email.',
+    };
   }
 
   async findAll(queryDto: QueryEmployeeDto) {
@@ -68,6 +114,7 @@ export class EmployeeService {
     const [employees, total] = await Promise.all([
       this.employeeModel
         .find(query)
+        .select('-password -otp')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -100,7 +147,14 @@ export class EmployeeService {
   }
 
   async update(id: string, updateEmployeeDto: UpdateEmployeeDto) {
-    const employee = await this.findOne(id);
+    const employee = await this.employeeModel.findOne({
+      _id: id,
+      is_deleted: false,
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
 
     // Check if email is being changed and if it already exists
     if (
@@ -132,14 +186,32 @@ export class EmployeeService {
       }
     }
 
+    // If password is being updated, hash it
+    if (updateEmployeeDto.password) {
+      updateEmployeeDto.password = await bcrypt.hash(
+        updateEmployeeDto.password,
+        10,
+      );
+    }
+
     Object.assign(employee, updateEmployeeDto);
     return employee.save();
   }
 
   async remove(id: string) {
-    const employee = await this.findOne(id);
+    const employee = await this.employeeModel.findOne({
+      _id: id,
+      is_deleted: false,
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+
     employee.is_deleted = true;
+    employee.isActive = false;
     await employee.save();
+
     return { message: 'Employee deleted successfully' };
   }
 
@@ -151,8 +223,65 @@ export class EmployeeService {
     return { message: 'Employee permanently deleted' };
   }
 
+  async resendCredentials(id: string) {
+    const employee = await this.employeeModel.findOne({
+      _id: id,
+      is_deleted: false,
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+
+    // Generate new password
+    const tempPassword = this.generateRandomPassword();
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // Update password
+    employee.password = hashedPassword;
+    await employee.save();
+
+    // Send credentials email
+    await this.mailService.sendEmployeeCredentials(
+      employee.emailAddress,
+      employee.full_name,
+      employee.user_name,
+      tempPassword,
+      employee.isSuperAdmin,
+    );
+
+    return { message: 'Credentials sent successfully to employee email' };
+  }
+
+  async resetPassword(id: string, newPassword: string) {
+    const employee = await this.employeeModel.findOne({
+      _id: id,
+      is_deleted: false,
+    });
+
+    if (!employee) {
+      throw new NotFoundException('Employee not found');
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    employee.password = hashedPassword;
+    await employee.save();
+
+    // Send notification email
+    await this.mailService.sendEmployeeCredentials(
+      employee.emailAddress,
+      employee.full_name,
+      employee.user_name,
+      newPassword,
+      employee.isSuperAdmin,
+    );
+
+    return { message: 'Password reset successfully' };
+  }
+
   async getStatistics() {
-    const [total, working, resigned] = await Promise.all([
+    const [total, working, resigned, superAdmins] = await Promise.all([
       this.employeeModel.countDocuments({ is_deleted: false }),
       this.employeeModel.countDocuments({
         is_deleted: false,
@@ -162,12 +291,17 @@ export class EmployeeService {
         is_deleted: false,
         work_status: { $ne: 'Working' },
       }),
+      this.employeeModel.countDocuments({
+        is_deleted: false,
+        isSuperAdmin: true,
+      }),
     ]);
 
     return {
       total,
       working,
       resigned,
+      superAdmins,
     };
   }
 }
