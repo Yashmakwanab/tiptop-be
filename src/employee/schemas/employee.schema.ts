@@ -14,7 +14,7 @@ export class Employee {
   @Prop({ required: true, unique: true })
   emailAddress: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false })
   password: string;
 
   @Prop({ required: true })

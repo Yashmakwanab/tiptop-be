@@ -51,7 +51,8 @@ export class EmployeeService {
     }
 
     // Use provided password or generate random one
-    const tempPassword = createEmployeeDto.password || this.generateRandomPassword();
+    const tempPassword =
+      createEmployeeDto.password || this.generateRandomPassword();
 
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
@@ -186,12 +187,25 @@ export class EmployeeService {
       }
     }
 
-    // If password is being updated, hash it
     if (updateEmployeeDto.password) {
-      updateEmployeeDto.password = await bcrypt.hash(
+      const currentHashedPassword = employee.password;
+
+      // Check if the incoming password matches existing one (means it's already hashed)
+      const isAlreadyHashed = await bcrypt.compare(
         updateEmployeeDto.password,
-        10,
+        currentHashedPassword,
       );
+
+      if (!isAlreadyHashed) {
+        // If not hashed yet, hash it now
+        updateEmployeeDto.password = await bcrypt.hash(
+          updateEmployeeDto.password,
+          10,
+        );
+      } else {
+        // If it's already hashed, keep existing hash
+        updateEmployeeDto.password = currentHashedPassword;
+      }
     }
 
     Object.assign(employee, updateEmployeeDto);

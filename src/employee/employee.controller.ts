@@ -72,10 +72,7 @@ export class EmployeeController {
   }
 
   @Post(':id/reset-password')
-  resetPassword(
-    @Param('id') id: string,
-    @Body() body: { password: string },
-  ) {
+  resetPassword(@Param('id') id: string, @Body() body: { password: string }) {
     return this.employeeService.resetPassword(id, body.password);
   }
 }
