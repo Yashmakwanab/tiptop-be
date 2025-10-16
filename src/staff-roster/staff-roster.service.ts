@@ -1,16 +1,6 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import {
-  FilterQuery,
-  HydratedDocument,
-  Model,
-  QuerySelector,
-  Types,
-} from 'mongoose';
+import { HydratedDocument, Model, Types } from 'mongoose';
 import { CreateStaffRosterDto } from './dto/create-staff-roster.dto';
 import { UpdateStaffRosterDto } from './dto/update-staff-roster.dto';
 import { QueryStaffRosterDto } from './dto/query-staff-roster.dto';
@@ -110,23 +100,18 @@ export class StaffRosterService {
       throw new NotFoundException(`Slot with ID ${slot_id} not found`);
     }
 
-    // Check for duplicate entries
-    const existingRosters = await this.staffRosterModel
-      .find({
-        user_id: new Types.ObjectId(user_id),
-        roster_date: { $in: roster_dates.map((d) => new Date(d)) },
-        is_deleted: false,
-      })
+    await this.staffRosterModel
+      .updateMany(
+        {
+          user_id: new Types.ObjectId(user_id),
+          roster_date: { $in: roster_dates.map((d) => new Date(d)) },
+          is_deleted: false,
+        },
+        {
+          $set: { is_deleted: true, deleted_at: new Date() },
+        },
+      )
       .exec();
-
-    if (existingRosters.length > 0) {
-      const existingDates = existingRosters.map(
-        (r) => r.roster_date.toISOString().split('T')[0],
-      );
-      throw new BadRequestException(
-        `Roster already exists for dates: ${existingDates.join(', ')}`,
-      );
-    }
 
     // Create multiple roster entries
     const rosterEntries = roster_dates.map((date) => ({
@@ -159,38 +144,40 @@ export class StaffRosterService {
     const skip = (page - 1) * limit;
 
     // Build filter query
-    const filter: FilterQuery<StaffRoster> = { is_deleted: false };
+    const query: Record<string, any> = { is_deleted: false };
 
     if (user_id) {
-      filter.user_id = new Types.ObjectId(user_id);
+      query.user_id = new Types.ObjectId(user_id);
     }
 
     if (roster_type) {
-      filter.roster_type = roster_type;
+      query.roster_type = roster_type;
     }
 
-    if (start_date || end_date) {
-      const rosterDateFilter: QuerySelector<Date> = {};
-      if (start_date) rosterDateFilter.$gte = new Date(start_date);
-      if (end_date) rosterDateFilter.$lte = new Date(end_date);
-      filter.roster_date = rosterDateFilter;
+    if (start_date && end_date) {
+      query.roster_date = {
+        $gte: new Date(start_date),
+        $lte: new Date(end_date),
+      };
+    } else if (start_date) {
+      query.roster_date = { $gte: new Date(start_date) };
+    } else if (end_date) {
+      query.roster_date = { $lte: new Date(end_date) };
     }
 
+    // Add search for roster_type in main query
     if (search) {
-      filter.$or = [
-        { start_time: { $regex: search, $options: 'i' } },
-        { end_time: { $regex: search, $options: 'i' } },
-      ];
+      query.roster_type = { $regex: search, $options: 'i' };
     }
 
     // Build sort object
     const sort: Record<string, 1 | -1> = {};
     sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
 
-    // Execute queries with population
+    // Execute queries with population (without match filters)
     const [data, total] = await Promise.all([
       this.staffRosterModel
-        .find(filter)
+        .find(query)
         .populate({
           path: 'user_id',
           select: 'firstName lastName user_name emailAddress',
@@ -203,38 +190,63 @@ export class StaffRosterService {
         .skip(skip)
         .limit(limit)
         .exec(),
-      this.staffRosterModel.countDocuments(filter).exec(),
+      this.staffRosterModel.countDocuments(query).exec(),
     ]);
 
+    // Apply search filter on populated data if needed
+    let filteredData = data as unknown as PopulatedRoster[];
+
+    if (search) {
+      filteredData = filteredData.filter((roster) => {
+        const searchLower = search.toLowerCase();
+
+        // Search in user fields
+        const userMatch =
+          roster.user_id?.firstName?.toLowerCase().includes(searchLower) ||
+          roster.user_id?.lastName?.toLowerCase().includes(searchLower) ||
+          roster.user_id?.user_name?.toLowerCase().includes(searchLower);
+
+        // Search in slot fields
+        const slotMatch =
+          roster.slot_id?.start_time?.toLowerCase().includes(searchLower) ||
+          roster.slot_id?.end_time?.toLowerCase().includes(searchLower);
+
+        // Search in roster_type
+        const rosterTypeMatch = roster.roster_type
+          ?.toLowerCase()
+          .includes(searchLower);
+
+        return userMatch || slotMatch || rosterTypeMatch;
+      });
+    }
+
     // Format response with populated data
-    const formattedData = (data as unknown as PopulatedRoster[]).map(
-      (roster) => ({
-        _id: roster._id,
-        user_id: roster.user_id?._id ?? null,
-        user_name: roster.user_id?.user_name ?? 'N/A',
-        full_name:
-          `${roster.user_id?.firstName ?? ''} ${roster.user_id?.lastName ?? ''}`.trim() ||
-          'N/A',
-        roster_date: roster.roster_date,
-        slot_id: roster.slot_id?._id ?? null,
-        start_time: roster.slot_id?.start_time ?? 'N/A',
-        end_time: roster.slot_id?.end_time ?? 'N/A',
-        total_hrs: roster.slot_id?.total_hrs ?? 'N/A',
-        roster_type: roster.roster_type,
-        created_by: roster.created_by ?? 'N/A',
-        updated_by: roster.updated_by ?? 'N/A',
-        createdAt: roster.createdAt,
-        updatedAt: roster.updatedAt,
-      }),
-    );
+    const formattedData = filteredData.map((roster) => ({
+      _id: roster._id,
+      user_id: roster.user_id?._id ?? null,
+      user_name: roster.user_id?.user_name ?? 'N/A',
+      full_name:
+        `${roster.user_id?.firstName ?? ''} ${roster.user_id?.lastName ?? ''}`.trim() ||
+        'N/A',
+      roster_date: roster.roster_date,
+      slot_id: roster.slot_id?._id ?? null,
+      start_time: roster.slot_id?.start_time ?? 'N/A',
+      end_time: roster.slot_id?.end_time ?? 'N/A',
+      total_hrs: roster.slot_id?.total_hrs ?? 'N/A',
+      roster_type: roster.roster_type,
+      created_by: roster.created_by ?? 'N/A',
+      updated_by: roster.updated_by ?? 'N/A',
+      createdAt: roster.createdAt,
+      updatedAt: roster.updatedAt,
+    }));
 
     return {
       data: formattedData,
       pagination: {
-        total,
+        total: total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(filteredData.length / limit),
       },
     };
   }
