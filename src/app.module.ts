@@ -6,6 +6,10 @@ import { EmployeeModule } from './employee/employee.module';
 import { MailModule } from './mail/mail.module';
 import { RosterModule } from './roster/roster.module';
 import { StaffRosterModule } from './staff-roster/staff-roster.module';
+import { MenuModule } from './menu/menu.module';
+import { RoleModule } from './role/role.module';
+import { RolePermissionModule } from './role-permission/role-permission.module';
+import { UserLogsModule } from './user-logs/user-logs.module';
 
 @Module({
   imports: [
@@ -24,6 +28,10 @@ import { StaffRosterModule } from './staff-roster/staff-roster.module';
     MailModule,
     RosterModule,
     StaffRosterModule,
+    MenuModule,
+    RoleModule,
+    RolePermissionModule,
+    UserLogsModule,
   ],
 })
 export class AppModule {}

@@ -16,13 +16,28 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { MailService } from '../mail/mail.service';
+import {
+  Role,
+  RoleDocument,
+  RolePermission,
+  RolePermissionDocument,
+} from 'src/role/schemas/role.schema';
+import { UserLogsService } from 'src/user-logs/user-logs.service';
+
+type RoleWithPermissions = {
+  permissions: any[];
+} & Record<string, any>;
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectModel(Employee.name) private employeeModel: Model<EmployeeDocument>,
+    @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+    @InjectModel(RolePermission.name)
+    private rolePermissionModel: Model<RolePermissionDocument>,
     private jwtService: JwtService,
     private mailService: MailService,
+    private userLogsService: UserLogsService,
   ) {}
 
   private generateOTP(): string {
@@ -109,6 +124,12 @@ export class AuthService {
     // If super admin, login directly
     if (employee.isSuperAdmin) {
       const token = this.generateToken(employee);
+      await this.userLogsService.createLog({
+        userId: employee._id as string,
+        username: employee.user_name,
+        description: 'User logged in successfully!',
+        module: 'Login',
+      });
       return {
         access_token: token,
         user: {
@@ -181,6 +202,13 @@ export class AuthService {
     // Generate token
     const token = this.generateToken(employee);
 
+    await this.userLogsService.createLog({
+      userId: employee._id as string,
+      username: employee.user_name,
+      description: 'User logged in successfully!',
+      module: 'Login',
+    });
+
     return {
       access_token: token,
       user: {
@@ -232,10 +260,33 @@ export class AuthService {
     const employee = await this.employeeModel
       .findById(userId)
       .select('-password -otp');
+
     if (!employee) {
       throw new UnauthorizedException();
     }
-    return employee;
+
+    let roleDetails: RoleWithPermissions | null = null;
+
+    if (employee.role) {
+      const role = await this.roleModel.findById(employee.role).lean();
+
+      if (role) {
+        const permissions = await this.rolePermissionModel
+          .find({ roleId: role._id, is_deleted: false })
+          .select('menuId menuName')
+          .lean();
+
+        roleDetails = {
+          ...role,
+          permissions: permissions || [],
+        };
+      }
+    }
+
+    return {
+      ...employee.toObject(),
+      role: roleDetails,
+    };
   }
 
   private generateToken(employee: EmployeeDocument): string {
@@ -245,5 +296,14 @@ export class AuthService {
       isSuperAdmin: employee.isSuperAdmin,
     };
     return this.jwtService.sign(payload);
+  }
+
+  async logout(userId: string, username: string) {
+    await this.userLogsService.createLog({
+      userId,
+      username,
+      description: 'User logged out!',
+      module: 'Login',
+    });
   }
 }

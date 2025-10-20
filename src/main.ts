@@ -11,6 +11,6 @@ async function bootstrap() {
     credentials: true,
   });
   app.useGlobalPipes(new ValidationPipe());
-  await app.listen(3001);
+  await app.listen(configService.get<number>('PORT') || 3005);
 }
 bootstrap();

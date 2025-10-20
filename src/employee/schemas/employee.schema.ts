@@ -20,8 +20,8 @@ export class Employee {
   @Prop({ required: true })
   associates: string;
 
-  @Prop({ type: [String], default: [] })
-  roles: string[];
+  @Prop({ type: String, default: null })
+  role: string;
 
   @Prop({ required: true })
   full_name: string;

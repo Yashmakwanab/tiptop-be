@@ -2,7 +2,6 @@ import {
   IsString,
   IsEmail,
   IsNotEmpty,
-  IsArray,
   IsOptional,
   IsDateString,
   IsBoolean,
@@ -34,9 +33,9 @@ export class CreateEmployeeDto {
   @IsNotEmpty()
   associates: string;
 
-  @IsArray()
+  @IsString()
   @IsOptional()
-  roles?: string[];
+  role?: string;
 
   @IsString()
   @IsNotEmpty()
