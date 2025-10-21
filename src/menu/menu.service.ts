@@ -284,21 +284,10 @@ export class MenuService {
       .lean()
       .exec();
 
-    console.log('=== DELETION DEBUG START ===');
-    console.log('Parent ID:', id);
-    console.log('Existing submenus count:', existingSubmenus.length);
-    console.log(
-      'Existing submenu IDs:',
-      existingSubmenus.map((s) => s._id.toString()),
-    );
-
     // Get IDs from payload that have _id (existing submenus to keep)
     const incomingIds = submenus
       .filter((sm) => sm._id)
       .map((sm) => sm._id!.toString());
-
-    console.log('Incoming submenu count:', submenus.length);
-    console.log('Incoming IDs from payload:', incomingIds);
 
     // 5. Find duplicate names in existing submenus
     const nameCountMap = new Map<string, any[]>();
@@ -335,9 +324,6 @@ export class MenuService {
           sortedDuplicates[0]._id.toString() === existingIdStr &&
           duplicates.length > 1
         ) {
-          console.log(
-            `Checking ${existingIdStr} (${existing.name}): DELETE (oldest duplicate)`,
-          );
           idsToDelete.push(existing._id);
           continue;
         }
@@ -345,33 +331,18 @@ export class MenuService {
 
       // Regular deletion logic - not in payload
       if (!isInPayload) {
-        console.log(
-          `Checking ${existingIdStr} (${existing.name}): DELETE (not in payload)`,
-        );
         idsToDelete.push(existing._id);
-      } else {
-        console.log(`Checking ${existingIdStr} (${existing.name}): KEEP`);
       }
     }
 
-    console.log(
-      'IDs to delete:',
-      idsToDelete.map((id: any) => id.toString()),
-    );
-
     // Permanently delete submenus not in the payload
     if (idsToDelete.length > 0) {
-      const deleteResult = await this.menuModel
+      await this.menuModel
         .deleteMany({
           _id: { $in: idsToDelete },
         })
         .exec();
-      console.log('Delete result:', deleteResult);
-      console.log('Deleted count:', deleteResult.deletedCount);
-    } else {
-      console.log('No submenus to delete');
     }
-    console.log('=== DELETION DEBUG END ===');
 
     // 6. Process each submenu in the payload
     for (const submenu of submenus) {

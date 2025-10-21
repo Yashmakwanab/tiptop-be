@@ -10,6 +10,8 @@ import { MenuModule } from './menu/menu.module';
 import { RoleModule } from './role/role.module';
 import { RolePermissionModule } from './role-permission/role-permission.module';
 import { UserLogsModule } from './user-logs/user-logs.module';
+import { IpAddressModule } from './ip-address/ip-address.module';
+import { MacAddressModule } from './mac-address/mac-address.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { UserLogsModule } from './user-logs/user-logs.module';
     RoleModule,
     RolePermissionModule,
     UserLogsModule,
+    IpAddressModule,
+    MacAddressModule,
   ],
 })
 export class AppModule {}
