@@ -43,7 +43,7 @@ export class UserLogsService {
     const [data, total] = await Promise.all([
       this.userLogsModel
         .find(query)
-        .sort({ dateCreated: -1 })
+        .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .exec(),

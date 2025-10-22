@@ -15,12 +15,17 @@ import {
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { MailModule } from '../mail/mail.module';
 import { UserLogsModule } from 'src/user-logs/user-logs.module';
+import {
+  IpAddress,
+  IpAddressSchema,
+} from 'src/ip-address/schemas/ip-address.schema';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: Employee.name, schema: EmployeeSchema },
       { name: Role.name, schema: RoleSchema },
+      { name: IpAddress.name, schema: IpAddressSchema },
       { name: RolePermission.name, schema: RolePermissionSchema },
     ]),
     PassportModule,

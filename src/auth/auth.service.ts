@@ -23,6 +23,10 @@ import {
   RolePermissionDocument,
 } from 'src/role/schemas/role.schema';
 import { UserLogsService } from 'src/user-logs/user-logs.service';
+import {
+  IpAddress,
+  IpAddressDocument,
+} from 'src/ip-address/schemas/ip-address.schema';
 
 type RoleWithPermissions = {
   permissions: any[];
@@ -33,6 +37,8 @@ export class AuthService {
   constructor(
     @InjectModel(Employee.name) private employeeModel: Model<EmployeeDocument>,
     @InjectModel(Role.name) private roleModel: Model<RoleDocument>,
+    @InjectModel(IpAddress.name)
+    private ipAddressModel: Model<IpAddressDocument>,
     @InjectModel(RolePermission.name)
     private rolePermissionModel: Model<RolePermissionDocument>,
     private jwtService: JwtService,
@@ -105,7 +111,28 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const { email, password } = loginDto;
 
-    // Find employee
+    let ipAddressq = '';
+    try {
+      const res = await fetch('https://api64.ipify.org?format=json');
+      const data: unknown = await res.json();
+
+      if (typeof data === 'object' && data !== null && 'ip' in data) {
+        ipAddressq = (data as { ip: string }).ip;
+      } else {
+        console.error('Unexpected IP response:', data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch IP:', err);
+    }
+
+    const validIP = await this.ipAddressModel.findOne({
+      address: ipAddressq,
+    });
+
+    if (!validIP) {
+      throw new UnauthorizedException('Access denied: Unauthorized IP address');
+    }
+
     const employee = await this.employeeModel.findOne({
       emailAddress: email,
       is_deleted: false,
@@ -115,13 +142,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Verify password
     const isPasswordValid = await bcrypt.compare(password, employee.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // If super admin, login directly
     if (employee.isSuperAdmin) {
       const token = this.generateToken(employee);
       await this.userLogsService.createLog({
@@ -142,16 +167,14 @@ export class AuthService {
       };
     }
 
-    // For regular employees, generate and send OTP
     const otp = this.generateOTP();
     const otpExpiry = new Date();
-    otpExpiry.setMinutes(otpExpiry.getMinutes() + 10); // OTP valid for 10 minutes
+    otpExpiry.setMinutes(otpExpiry.getMinutes() + 10);
 
     employee.otp = await bcrypt.hash(otp, 10);
     employee.otpExpiry = otpExpiry;
     await employee.save();
 
-    // Send OTP via email
     await this.mailService.sendOTP(
       employee.emailAddress,
       employee.full_name,
