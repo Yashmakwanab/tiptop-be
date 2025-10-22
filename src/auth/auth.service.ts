@@ -109,24 +109,10 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const { email, password } = loginDto;
-
-    let ipAddressq = '';
-    try {
-      const res = await fetch('https://api64.ipify.org?format=json');
-      const data: unknown = await res.json();
-
-      if (typeof data === 'object' && data !== null && 'ip' in data) {
-        ipAddressq = (data as { ip: string }).ip;
-      } else {
-        console.error('Unexpected IP response:', data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch IP:', err);
-    }
+    const { email, password, ipAddress } = loginDto;
 
     const validIP = await this.ipAddressModel.findOne({
-      address: ipAddressq,
+      address: ipAddress,
     });
 
     if (!validIP) {
